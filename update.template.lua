@@ -14,7 +14,7 @@ local	BASE_LINK = "http://"..IP..":"..PORT
 
 local	DO_LIB = true
 local	DO_BIN = true
-local	DO_CONF = true
+local	DO_CONF = false
 local	DO_ETC = false
 local	DO_SERVICE = false
 local	DO_EXTRA = false
@@ -87,22 +87,7 @@ function	update_lib()
 	print("Downloading lib")
 
 	--- 0x00
-	wget_lib("periph.lua")
-	wget_lib("log.lua")
-	wget_lib("bigint.lua")
-	wget_lib("vgpu.lua")
-
-	--- 0x01
-	wget_lib("periph-im.lua")
-	wget_lib("utils.lua")
-	wget_lib("rsa.lua")
-
-	--- 0x02
-	wget_lib("event_handler.lua")
-	wget_lib("tls.lua")
-
-	--- 0x03
-	wget_lib("server.lua")
+	wget_lib("circle.lua")
 
 end
 
@@ -116,26 +101,7 @@ function	update_bin()
 	mkdir(DIR_TAR_BIN)
 
 	print("Downloading bin")
-	wget_bin("lock.lua")
-
-	wget_bin("station.lua")
-	wget_bin("station_display.lua")
-	wget_bin("pong.lua")
-
-	wget_bin("test_print.lua")
-	wget_bin("test_rsa.lua")
-	wget_bin("test_rsa.priv")
-	wget_bin("test_rsa.pub")
-	wget_bin("test_node.lua")
-	wget_bin("test_server.lua")
-	wget_bin("test_client.lua")
-	wget_bin("test_chat.lua")
-	wget_bin("test_vgpu.lua")
-	wget_bin("test_bigint.lua")
-	wget_bin("test_tls.a.lua")
-	wget_bin("test_tls.b.lua")
-	wget_bin("test_zirnox.lua")
-	wget_bin("test_pong.lua")
+	wget_bin("diggy.lua")
 end
 
 --- CONF
@@ -149,10 +115,6 @@ function	update_conf()
 	mkdir(DIR_TAR_CONF)
 
 	print("Downloading config")
-
-	wget_conf(".shrc")
-	wget(DIR_SER_CONF.."/motd", "/etc/motd")
-	wget(DIR_SER_CONF.."/profile.lua", "/etc/profile.lua")
 end
 
 --- ETC
@@ -166,8 +128,6 @@ function	update_etc()
 	mkdir(DIR_TAR_ETC)
 
 	print("Downloading etc")
-
-	-- wget_etc("template_station.lua")
 end
 
 --- SERVICE
@@ -180,9 +140,6 @@ function	update_service()
 	mkdir(DIR_TAR_SERVICE)
 
 	print("Downloading Service")
-
-	wget(DIR_SER_SERVICE.."/rc.cfg", "/etc/rc.cfg")
-	wget_service("redgate.lua")
 end
 
 --- EXTRA
