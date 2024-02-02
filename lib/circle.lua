@@ -4,7 +4,7 @@ local	circle = {
 }
 
 function	circle.get(xc, yc, r)
-	local	c_key = xc..","..yc
+	local	c_key = xc..","..yc..":"..r
 	if circle.cache[c_key] then return circle.cache[c_key] end
 
 	local	o = circle.octant.get(xc, yc, r)
