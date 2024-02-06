@@ -3,8 +3,13 @@ local	component = require("component")
 local	computer = require("computer")
 local	robot = require("robot")
 local	robot_ic = component.inventory_controller
+local	chat = component.chat
 
 local	circle = require("circle")
+
+DIGGY_NAME = "DiggyBot"
+DIGGY_MSG = "I am dward and i'm diggin an hole, DIGGY DIGGY HOLE, DIGGY DIGGY HOLE"
+QUIET = false
 
 NORTH = 0
 EAST = 1
@@ -15,16 +20,22 @@ LEFT = 5
 
 local	diggy = {
 	["pos"] = {["x"] = 0, ["y"] = 0, ["z"] = 237},
+	["last_pos"] = {["x"] = 0, ["y"] = 0, ["z"] = 0},
 	["rdir"] = NORTH,
 	["tool_slot"] = 0,
 	["tool_stock"] = 2,
+	["full_threshold"] = 2,
+	["energy_threshold"] = 15,
+	["need_energy"] = false,
+	["need_deposit"] = false,
+	["need_tool"] = false,
 }
 
-function	gpos(x, y, z)
-	if z then return "("..x..","..y..","..z..")"
-	else return "("..x..","..y..")"
-	end
-end
+-- function	gpos(x, y, z)
+-- 	if z then return "("..x..","..y..","..z..")"
+-- 	else return "("..x..","..y..")"
+-- 	end
+-- end
 
 function	get_random_list(len)
 	local	l = {}
@@ -47,78 +58,6 @@ function	get_random_list(len)
 	end
 	f:close()
 	return l
-end
-
-function	diggy.forward(_n, dir)
-	local	function step(dir)
-		local	step_func = robot.forward
-
-		if dir == 1 then
-			step_func = robot.up
-		elseif dir == 2 then
-			step_func = robot.down
-		end
-		local	retv, facing = step_func()
-
-		if not retv then
-			if facing == "solid" then
-				diggy.swing(dir)
-				return step(dir)
-			elseif facing == "entity" then
-				diggy.swing(dir)
-				computer.beep(1000, 1)
-				return step(dir)
-			else
-				print("error facing "..facing)
-				return false
-			end
-		else
-			return true
-		end
-	end
-	local	n = _n or 1
-	local	m = 0
-
-	while n > 0 do
-		if step(dir) then
-			n = n - 1
-			m = m + 1
-		end
-	end
-	return m
-end
-
-function	diggy.move(x, y, z)
-	local	dx = x - diggy.pos.x
-	local	dy = y - diggy.pos.y
-	local	z = z or diggy.pos.z
-	local	dz = z - diggy.pos.z
-
-	if dx > 0 then
-		diggy.face(EAST)
-	elseif 0 > dx then
-		diggy.face(WEST)
-		dx = dx * -1
-	end
-	diggy.forward(dx)
-
-	if dy > 0 then
-		diggy.face(NORTH)
-	elseif 0 > dy then
-		diggy.face(SOUTH)
-		dy = dy * -1
-	end
-	diggy.forward(dy)
-
-	if dz > 0 then
-		diggy.forward(dz, 1)
-	elseif 0 > dz then
-		diggy.forward(dz * -1, 2)
-	end
-
-	diggy.pos.x = x
-	diggy.pos.y = y
-	diggy.pos.z = z
 end
 
 function	save_circle(c)
@@ -289,7 +228,6 @@ function	diggy.step(dir, soft)
 	local	retv, facing = step_func()
 
 	if not retv then
-		print("error facing "..facing)
 		if facing == "entity" then
 			diggy.swing(dir)
 			computer.beep(1000, 1)
@@ -542,11 +480,102 @@ function	diggy.equip()
 	end
 end
 
+function	diggy.refill()
+	diggy.last_pos.x = diggy.pos.x
+	diggy.last_pos.y = diggy.pos.y
+	diggy.last_pos.z = diggy.pos.z
+
+	if diggy.need_energy then
+		diggy.base_move(base.charger)
+		diggy.recharge()
+		diggy.need_energy = false
+	end
+	if diggy.need_deposit then
+		diggy.base_move(base.chest)
+		diggy.deposit()
+		diggy.need_deposit = false
+	end
+	if diggy.need_tool then
+		diggy.base_move(base.tool)
+		diggy.equip()
+		diggy.need_tool = false
+	end
+	diggy.move(diggy.last_pos.x, diggy.last_pos.y, diggy.last_pos.z)
+end
+
+function	diggy.check_slot()
+	local	robot_size = robot.inventorySize()
+	local	free_slot = 0
+
+	for i = (diggy.tool_slot * diggy.tool_stock) + 1, robot_size do
+		local	s = robot_ic.getStackInInternalSlot(i)
+		if s == nil then free_slot = free_slot + 1 end
+	end
+	return diggy.full_threshold >= free_slot
+end
+
+function	diggy.check_tool()
+	for i = 0, diggy.tool_slot - 1 do
+		local	tool = nil
+		local	n_tool = 0
+		for j = 1, diggy.tool_stock do
+			local	k = (i * diggy.tool_stock) + j
+			local	tmp_tool = diggy.tool_type(k)
+			if tool == nil then
+				if tmp_tool ~= "unknown" then
+					tool = tmp_tool
+					n_tool = n_tool + 1
+				end
+			else
+				if tmp_tool == tool then
+					n_tool = n_tool + 1
+				end
+			end
+		end
+		if n_tool ~= diggy.tool_stock then
+			return true
+		end
+	end
+	return false
+end
+
+function	diggy.print_state()
+	function	ok(t) print("[ O ] "..t) end
+	function	ko(t) print("[ X ] "..t) end
+
+	if diggy.need_energy then ko("energy") else ok("energy") end
+	if diggy.need_deposit then ko("deposit") else ok("deposit") end
+	if diggy.need_tool then ko("tool") else ok("tool") end
+end
+
+function	diggy.check_state()
+	diggy.need_energy = diggy.energy_threshold > diggy.get_energy()
+	diggy.need_deposit = diggy.check_slot()
+	diggy.need_tool = diggy.check_tool()
+
+	diggy.print_state()
+	diggy.refill()
+end
+
+function	diggy.init()
+	if chat then chat.setName(DIGGY_NAME) end
+
+	diggy.base_move(base.tool)
+	diggy.deposit_tool()
+	diggy.equip()
+	diggy.check_state()
+end
+
+function	diggy.say(msg)
+	if chat and QUIET ~= true then
+		chat.say("["..diggy.pos.z.."] "..msg)
+	end
+end
+
 -- MAIN
 
 XC, YC, R = 0, 0, 5
 DEPTH = 3
-running = true
 
 base = {
 	["charger"] = {0, -8, 237, SOUTH},
@@ -554,25 +583,22 @@ base = {
 	["tool"] = {7, -10, 237, SOUTH},
 }
 
-diggy.base_move(base.tool)
-diggy.deposit_tool()
-diggy.equip()
-diggy.base_move(base.charger)
-diggy.recharge()
-diggy.base_move(base.chest)
-diggy.deposit()
+diggy.init()
 
 Xb, Yb, Zb = 0, R + 1, 237
 
-while running do
-	if diggy.pos.z == DEPTH then running = false end
+while true do
+	if diggy.pos.z == DEPTH then return end
+	diggy.say(DIGGY_MSG)
 	diggy.do_circle_perimeter(XC, YC, R)
+	diggy.check_state()
 	r2 = R - 1
 	while r2 > 0 do
 		local	c = circle.get(XC, YC, r2)
 		for i, v in ipairs(c) do
 			diggy.move(v[1], v[2], diggy.pos.z, false)
 		end
+		diggy.check_state()
 		r2 = r2 - 1
 	end
 	diggy.move(XC, YC, diggy.pos.z, false)

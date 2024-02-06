@@ -10,8 +10,4 @@ see this [repo](https://github.com/Pixailz/OpenComputer) for more help
 1. better tool management
    - `["pickaxe"] = {"Pickaxe", "pickaxe"}`
    - `["block"] = {"Stone", "Dirt"}`
-
-1. check and react for the state, as a back_to_base
-   - one tool left, need to refill on next back_to_base
-   - inventory full, need to deposit on next back_to_base
-   - low energy, need imediate back_to_base
+1. implement persistence (save position)
