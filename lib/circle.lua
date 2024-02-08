@@ -1,8 +1,19 @@
-local	circle = {
-	["octant"] = {},
-	["cache"] = {},
+---@meta
+
+--- Library for creating and manipulating circles.
+---@class circle
+local circle = {
+	--- Cache for storing circle data to avoid repeated calculations.
+	cache = {},
+	--- Table to store octant data.
+	octant = {},
 }
 
+--- Gets the coordinates of points forming a circle.
+---@param xc number # The x-coordinate of the circles center.
+---@param yc number # The y-coordinate of the circles center.
+---@param r number # The radius of the circle.
+---@return table # A table containing coordinates of points forming the circle.
 function	circle.get(xc, yc, r)
 	local	c_key = xc..","..yc..":"..r
 	if circle.cache[c_key] then return circle.cache[c_key] end
@@ -25,6 +36,11 @@ function	circle.get(xc, yc, r)
 	return circle.cache[c_key]
 end
 
+--- Calculates the points in a single octant of a circle.
+---@param xc number # The x-coordinate of the circles center.
+---@param yc number # The y-coordinate of the circles center.
+---@param r number # The radius of the circle.
+---@return table # A table containing points in a single octant of the circle.
 function	circle.octant.get(xc, yc, r)
 	local	o = {{}, {}, {}, {}, {}, {}, {}, {}}
 	local	t1 = r / 16
@@ -48,6 +64,12 @@ function	circle.octant.get(xc, yc, r)
 	return o
 end
 
+--- Adds points from an octant to the circle data.
+---@param o table # The table storing octant data.
+---@param xc number # The x-coordinate of the circles center.
+---@param x number # The x-coordinate of the current point.
+---@param yc number # The y-coordinate of the circles center.
+---@param y number # The y-coordinate of the current point.
 function	circle.octant.add(o, xc, x, yc, y)
 	o[1][#o[1] + 1] = {xc + x, yc + y}
 	o[2][#o[2] + 1] = {xc + y, yc + x}
@@ -59,6 +81,9 @@ function	circle.octant.add(o, xc, x, yc, y)
 	o[8][#o[8] + 1] = {xc + x, yc - y}
 end
 
+--- Cleans up duplicate points in the circle data.
+---@param c table # The table containing coordinates of points forming the circle.
+---@return table # A table containing unique coordinates of points forming the circle.
 function	circle.clean(c)
 	local	cleaned = {}
 	local	founded = false
@@ -75,6 +100,13 @@ function	circle.clean(c)
 	return cleaned
 end
 
+--- Checks if a point is inside the circle.
+---@param x number # The x-coordinate of the point.
+---@param y number # The y-coordinate of the point.
+---@param xc number # The x-coordinate of the circle's center.
+---@param yc number # The y-coordinate of the circle's center.
+---@param r number # The radius of the circle.
+---@return boolean # `true` if the point is inside the circle, `false` otherwise.
 function circle.is_in(x, y, xc, yc, r)
 	local	xx, yy = x - xc, y - yc
 	if math.sqrt((xx * xx) + (yy * yy)) < r then return true end
