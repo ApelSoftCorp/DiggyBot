@@ -11,14 +11,14 @@ local circle = {
 
 --- Gets the coordinates of points forming a circle.
 ---@param xc number # The x-coordinate of the circles center.
----@param yc number # The y-coordinate of the circles center.
+---@param zc number # The y-coordinate of the circles center.
 ---@param r number # The radius of the circle.
 ---@return table # A table containing coordinates of points forming the circle.
-function	circle.get(xc, yc, r)
-	local	c_key = xc..","..yc..":"..r
+function	circle.get(xc, zc, r)
+	local	c_key = xc..","..zc..":"..r
 	if circle.cache[c_key] then return circle.cache[c_key] end
 
-	local	o = circle.octant.get(xc, yc, r)
+	local	o = circle.octant.get(xc, zc, r)
 	local	c = o[1]
 
 	for i = #o[2], 1, -1 do c[#c + 1] = o[2][i] end
@@ -38,26 +38,26 @@ end
 
 --- Calculates the points in a single octant of a circle.
 ---@param xc number # The x-coordinate of the circles center.
----@param yc number # The y-coordinate of the circles center.
+---@param zc number # The y-coordinate of the circles center.
 ---@param r number # The radius of the circle.
 ---@return table # A table containing points in a single octant of the circle.
-function	circle.octant.get(xc, yc, r)
+function	circle.octant.get(xc, zc, r)
 	local	o = {{}, {}, {}, {}, {}, {}, {}, {}}
 	local	t1 = r / 16
 
 	local	t2 = 0
 	local	x = r
-	local	y = 0
+	local	z = 0
 	-- local	rounded = false
 
-	while x >= y do
-		circle.octant.add(o, xc, x, yc, y)
-		y = y + 1
-		t1 = t1 + y
+	while x >= z do
+		circle.octant.add(o, xc, x, zc, z)
+		z = z + 1
+		t1 = t1 + z
 		t2 = t1 - x
 		if t2 >= 0 then
 			t1 = t2
-			circle.octant.add(o, xc, x - 1, yc, y - 1)
+			circle.octant.add(o, xc, x - 1, zc, z - 1)
 			x = x - 1
 		end
 	end
@@ -68,17 +68,17 @@ end
 ---@param o table # The table storing octant data.
 ---@param xc number # The x-coordinate of the circles center.
 ---@param x number # The x-coordinate of the current point.
----@param yc number # The y-coordinate of the circles center.
----@param y number # The y-coordinate of the current point.
-function	circle.octant.add(o, xc, x, yc, y)
-	o[1][#o[1] + 1] = {xc + x, yc + y}
-	o[2][#o[2] + 1] = {xc + y, yc + x}
-	o[3][#o[3] + 1] = {xc - y, yc + x}
-	o[4][#o[4] + 1] = {xc - x, yc + y}
-	o[5][#o[5] + 1] = {xc - x, yc - y}
-	o[6][#o[6] + 1] = {xc - y, yc - x}
-	o[7][#o[7] + 1] = {xc + y, yc - x}
-	o[8][#o[8] + 1] = {xc + x, yc - y}
+---@param zc number # The z-coordinate of the circles center.
+---@param z number # The z-coordinate of the current point.
+function	circle.octant.add(o, xc, x, zc, z)
+	o[1][#o[1] + 1] = {xc + x, zc + z}
+	o[2][#o[2] + 1] = {xc + z, zc + x}
+	o[3][#o[3] + 1] = {xc - z, zc + x}
+	o[4][#o[4] + 1] = {xc - x, zc + z}
+	o[5][#o[5] + 1] = {xc - x, zc - z}
+	o[6][#o[6] + 1] = {xc - z, zc - x}
+	o[7][#o[7] + 1] = {xc + z, zc - x}
+	o[8][#o[8] + 1] = {xc + x, zc - z}
 end
 
 --- Cleans up duplicate points in the circle data.
@@ -102,18 +102,18 @@ end
 
 --- Checks if a point is inside the circle.
 ---@param x number # The x-coordinate of the point.
----@param y number # The y-coordinate of the point.
+---@param z number # The z-coordinate of the point.
 ---@param xc number # The x-coordinate of the circle's center.
----@param yc number # The y-coordinate of the circle's center.
+---@param zc number # The z-coordinate of the circle's center.
 ---@param r number # The radius of the circle.
 ---@return boolean # `true` if the point is inside the circle, `false` otherwise.
-function circle.is_in(x, y, xc, yc, r)
-	local	xx, yy = x - xc, y - yc
-	if math.sqrt((xx * xx) + (yy * yy)) < r then return true end
+function circle.is_in(x, z, xc, zc, r)
+	local	xx, zz = x - xc, z - zc
+	if math.sqrt((xx * xx) + (zz * zz)) < r then return true end
 
-	local	c = circle.get(xc, yc, r)
+	local	c = circle.get(xc, zc, r)
 	for i, v in ipairs(c) do
-		if v[1] == x and v[2] == y then return true end
+		if v[1] == x and v[2] == z then return true end
 	end
 	return false
 end
