@@ -1,8 +1,6 @@
-# OpenComputer Lib
+# How To
 
-## How To
-
-### Setup update.template.lua
+## Setup update.template.lua
 
 This repository is a template from this
 [repository](https://github.com/Pixailz/OpenComputer), and it includes an
@@ -11,9 +9,9 @@ between the host PC and the OC PC.
 
 Please refer to it for more information.
 
-### Use DiggyBot
+## Use DiggyBot
 
-#### 1. Starting Position and Facing
+### 1. Starting Position and Facing
 
 You have to set up DiggyBot with its current coordinates or a relative one, and
 specify which cardinal point it faces.
@@ -23,7 +21,9 @@ The position can be set at `diggy.pos` and the facing direction at `diggy.facing
 > [!TIP]
 > With this, you can use the `diggy.move` function to make it move to a position.
 
-#### 2. Tools Needed
+---
+
+### 2. Tools Needed
 
 You can set up DiggyBot to retrieve some tools from a chest, which are necessary
 for breaking blocks and placing them, when block are missing in the perimeter of
@@ -85,7 +85,9 @@ tool_order = {
 Every tool name that contain **block** in it will be tried to be placed when
 `diggy.place(face)` is called
 
-#### 3. Basement
+---
+
+### 3. Basement
 
 Thirdly you have to setup some coordinate to make a basement for DiggyBot
 here's some point you can setup:
@@ -101,7 +103,9 @@ base = {
 From first to last; Xpos, Zpos, Ypos, Side to face (for exemple chest need to be
 faced in order to be interacted)
 
-## ToDo
+---
+
+# ToDo
 
 1. try to fix dumb soft movement. maybe stop direction when changing_dir()
 1. implement persistence (save position)
