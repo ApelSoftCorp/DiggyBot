@@ -20,6 +20,8 @@ SOUTH = 2
 WEST = 3
 RIGHT = 4
 LEFT = 5
+UP = 6
+DOWN = 7
 
 --- [[ CONFIG ]] ---
 
@@ -186,6 +188,7 @@ end
 --- Rotates the robot to face a specified direction.
 ---@param dir number # The target direction to face.
 function	diggy.face(dir)
+	if dir == UP or dir == DOWN then return end
 	if dir == diggy.facing then
 		return
 	elseif dir == NORTH then
@@ -277,7 +280,7 @@ function	diggy.step(dir, soft)
 	if not retv then
 		if facing == "entity" then
 			diggy.swing(dir)
-			computer.beep(1000, 1)
+			computer.beep(1000)
 			return diggy.step(dir, soft)
 		elseif facing == "solid" and soft == false then
 			diggy.swing(dir)
@@ -313,6 +316,8 @@ function	diggy.move(x, z, y, soft)
 	local	dx = x - diggy.pos.x
 	local	dy = y - diggy.pos.y
 	local	dz = z - diggy.pos.z
+
+	diggy.place(DOWN)
 
 	--- Moves the robot along the x-axis.
 	function	move_x()
@@ -397,6 +402,53 @@ function	diggy.free_move()
 	end
 end
 
+--- Moves the robot to a designated waypoint to carry out a task.
+---@param wp table # The waypoint coordinates [x, z].
+function	diggy.get_out(wp)
+	local	vx, vz = wp[1] - diggy.pos.x, wp[2] - diggy.pos.z
+	local	dx, dz = 0, 0
+	local	t = diggy.get_task()
+	local	x, z, y = t.data[1], t.data[2], t.data[3]
+
+	if vx > 0 then
+		dx = 1
+	elseif 0 > vx then
+		dx = -1
+		vx = vx * -1
+	end
+	if vz > 0 then
+		dz = 1
+	elseif 0 > vz then
+		dz = -1
+		vz = vz * -1
+	end
+
+	if vx > vz then
+		if dx == -1 then
+			x = x - t.data[4]
+		else
+			x = x + t.data[4]
+		end
+	else
+		if dz == -1 then
+			z = z - t.data[4]
+		else
+			z = z + t.data[4]
+		end
+	end
+
+	diggy.move(x, z, y)
+end
+
+--- Moves the robot to a specified waypoint in the base.
+---@param wp table # The waypoint table containing coordinates and facing direction.
+function	diggy.base_move(wp)
+	if jobs.current_task > 0 then diggy.get_out(wp) end
+
+	diggy.move(wp[1], wp[2], wp[3])
+	diggy.face(wp[4])
+end
+
 --- [[ INTERACT ]] ---
 
 --- Determines the inventory slot of the next tool.
@@ -450,7 +502,13 @@ end
 function	diggy.place(side)
 	diggy.select_item()
 	diggy.face(side)
-	robot.place()
+	if side == UP then
+		robot.placeUp()
+	elseif side == DOWN then
+		robot.placeDown()
+	else
+		robot.place()
+	end
 end
 
 --- Outputs a message in the chat if available and not in quiet mode.
@@ -459,111 +517,6 @@ function	diggy.say(msg)
 	if chat and QUIET ~= true then
 		chat.say("["..diggy.pos.y.."] "..msg)
 	end
-end
-
---- [[ DIG ]] ---
-
-	--- [[ CIRCLE / CYLINDER ]] ---
-
---- Digs the perimeter of a circle defined by its center coordinates (xc, zc) and radius (r).
----@param xc number # The x-coordinate of the circles center.
----@param zc number # The z-coordinate of the circles center.
----@param r number # The radius of the circle.
-function	diggy.do_circle_perimeter(xc, zc, r)
-	local	c = circle.get(xc, zc, r)
-
-	for i, v in ipairs(c) do
-		diggy.move(v[1], v[2], diggy.pos.y, false)
-		if circle.is_in(v[1] + 1, v[2], xc, zc, r) == false then
-			diggy.place(EAST)
-		end
-		if circle.is_in(v[1] - 1, v[2], xc, zc, r) == false then
-			diggy.place(WEST)
-		end
-		if circle.is_in(v[1], v[2] + 1, xc, zc, r) == false then
-			diggy.place(SOUTH)
-		end
-		if circle.is_in(v[1], v[2] - 1, xc, zc, r) == false then
-			diggy.place(NORTH)
-		end
-	en
-end
-
---- Digs a cylindrical area around a center point with optional height.
----@param xc number # The x-coordinate of the cylinders center.
----@param zc number # The z-coordinate of the cylinders center.
----@param yc? number # The optional y-coordinate of the cylinders base.
----@param r number # The radius of the cylinder.
----@param d number # The height of the cylinder.
-function	diggy.dig_cylinder(xc, zc, yc, r, d)
-	local	yc = yc or diggy.pos.y
-
-	diggy.move(xc, zc, yc, false)
-	while true do
-		diggy.say(DIGGY_MSG)
-		diggy.do_circle_perimeter(xc, zc, r)
-		diggy.check_state()
-		r2 = r - 1
-		while r2 > 0 do
-			local	c = circle.get(xc, zc, r2)
-			for i, v in ipairs(c) do
-				diggy.move(v[1], v[2], diggy.pos.y, false)
-			end
-			diggy.check_state()
-			r2 = r2 - 1
-		end
-		if diggy.pos.y == DEPTH then return end
-		diggy.move(xc, zc, diggy.pos.y, false)
-		diggy.step(2, false)
-	end
-end
-
---- [[ CHECK ]] ---
-
---- Retrieves the current energy level as a percentage.
----@return number # The current energy level.
-function	get_energy()
-	return computer.energy() * 100 / computer.maxEnergy()
-end
-
---- Checks if the inventory needs to be deposited.
----@return boolean # True if the inventory needs to be deposited, false otherwise.
-function	diggy.check_deposit()
-	local	robot_size = robot.inventorySize()
-	local	free_slot = 0
-
-	for i = (#tool_order * diggy.tool_stock) + 1, robot_size do
-		local	s = robot_ic.getStackInInternalSlot(i)
-		if s == nil then free_slot = free_slot + 1 end
-	end
-	return diggy.full_threshold >= free_slot
-end
-
---- Checks if any tools need to be replenished.
----@return boolean # True if any tools need to be replenished, false otherwise.
-function	diggy.check_tool()
-	for i = 0, #tool_order - 1 do
-		local	tool = nil
-		local	n_tool = 0
-		for j = 1, diggy.tool_stock do
-			local	k = (i * diggy.tool_stock) + j
-			local	tmp_tool = diggy.tool_type(k)
-			if tool == nil then
-				if tmp_tool ~= "unknown" and tmp_tool ~= "void" then
-					tool = tmp_tool
-					n_tool = n_tool + 1
-				end
-			else
-				if tmp_tool == tool then
-					n_tool = n_tool + 1
-				end
-			end
-		end
-		if n_tool ~= diggy.tool_stock then
-			return true
-		end
-	end
-	return false
 end
 
 --- [[ BASEMENT ]] ---
@@ -604,7 +557,6 @@ function	diggy.tool_unequip()
 		if tool_type == "void" then
 			robot.select(i)
 			robot_ic.equip()
-			print("unequiped")
 			return true
 		end
 	end
@@ -643,6 +595,15 @@ function	diggy.tool_sort(id)
 		end
 	end
 	return diggy.tool_stock - n
+end
+
+--- Sorts tools in the inventory to ensure they are grouped together by type.
+function	diggy.tools_sort()
+	if diggy.tool_is_equiped() then diggy.tool_unequip() end
+
+	for i, v in ipairs(tool_order) do
+		diggy.tool_sort(v)
+	end
 end
 
 --- Retrieves a tool from a chest inventory.
@@ -686,13 +647,139 @@ function	diggy.tool_refill()
 	end
 end
 
-	--- [[ OTHER ]] ---
+--- [[ TASKS ]] ---
 
---- Moves the robot to a specified waypoint in the base.
----@param waypoint table # The waypoint table containing coordinates and facing direction.
-function	diggy.base_move(waypoint)
-	diggy.move(waypoint[1], waypoint[2], waypoint[3])
-	diggy.face(waypoint[4])
+	--- [[ CIRCLE / CYLINDER ]] ---
+
+--- Digs the perimeter of a circle defined by its center coordinates (xc, zc) and radius (r).
+---@param xc number # The x-coordinate of the circles center.
+---@param zc number # The z-coordinate of the circles center.
+---@param r number # The radius of the circle.
+function	diggy.do_circle_perimeter(xc, zc, r)
+	local	c = circle.get(xc, zc, r)
+
+	for i, v in ipairs(c) do
+		diggy.move(v[1], v[2], diggy.pos.y, false)
+		if circle.is_in(v[1] + 1, v[2], xc, zc, r) == false then
+			diggy.place(EAST)
+		end
+		if circle.is_in(v[1] - 1, v[2], xc, zc, r) == false then
+			diggy.place(WEST)
+		end
+		if circle.is_in(v[1], v[2] + 1, xc, zc, r) == false then
+			diggy.place(SOUTH)
+		end
+		if circle.is_in(v[1], v[2] - 1, xc, zc, r) == false then
+			diggy.place(NORTH)
+		end
+	end
+end
+
+--- Digs a cylindrical area around a center point with optional height.
+---@param xc number # The x-coordinate of the cylinders center.
+---@param zc number # The z-coordinate of the cylinders center.
+---@param yc? number # The optional y-coordinate of the cylinders base.
+---@param r number # The radius of the cylinder.
+---@param d number # The height of the cylinder.
+function	diggy.do_cylinder(xc, zc, yc, r, d)
+	local	yc = yc or diggy.pos.y
+
+	diggy.move(xc, zc, yc, false)
+	while true do
+		diggy.say(DIGGY_MSG)
+		diggy.do_circle_perimeter(xc, zc, r)
+		diggy.check_state()
+		r2 = r - 1
+		while r2 > 0 do
+			local	c = circle.get(xc, zc, r2)
+			for i, v in ipairs(c) do
+				diggy.move(v[1], v[2], diggy.pos.y, false)
+			end
+			diggy.check_state()
+			r2 = r2 - 1
+		end
+		if diggy.pos.y == DEPTH then return end
+		diggy.move(xc, zc, diggy.pos.y, false)
+		diggy.step(2, false)
+	end
+end
+
+--- Retrieves the next task from the list of jobs.
+---@return table # The next task to be executed.
+function	diggy.get_task()
+	return jobs.task[jobs.current_task]
+end
+
+function	diggy.do_task()
+	for i, v in ipairs(jobs.task) do
+		jobs.current_task = jobs.current_task + 1
+		if v.type == "cylinder" then
+			diggy.do_cylinder(table.unpack(v.data))
+		else
+			print("unknown task type")
+		end
+	end
+end
+
+	--- [[ STATE ]] ---
+
+		--- [[ CHECK ]] ---
+
+--- Retrieves the current energy level as a percentage.
+---@return number # The current energy level.
+function	get_energy()
+	return computer.energy() * 100 / computer.maxEnergy()
+end
+
+--- Checks if the inventory needs to be deposited.
+---@return boolean # True if the inventory needs to be deposited, false otherwise.
+function	diggy.check_deposit()
+	local	robot_size = robot.inventorySize()
+	local	free_slot = 0
+
+	for i = (#tool_order * diggy.tool_stock) + 1, robot_size do
+		local	s = robot_ic.getStackInInternalSlot(i)
+		if s == nil then free_slot = free_slot + 1 end
+	end
+	return diggy.full_threshold >= free_slot
+end
+
+--- Checks if any tools need to be replenished.
+---@return boolean # True if any tools need to be replenished, false otherwise.
+function	diggy.check_tool()
+	diggy.tools_sort()
+	for i = 0, #tool_order - 1 do
+		local	tool = nil
+		local	n_tool = 0
+		for j = 1, diggy.tool_stock do
+			local	k = (i * diggy.tool_stock) + j
+			local	tmp_tool = diggy.tool_type(k)
+			if tool == nil then
+				if tmp_tool ~= "unknown" and tmp_tool ~= "void" then
+					tool = tmp_tool
+					n_tool = n_tool + 1
+				end
+			else
+				if tmp_tool == tool then
+					n_tool = n_tool + 1
+				end
+			end
+		end
+		if n_tool ~= diggy.tool_stock then
+			return true
+		end
+	end
+	return false
+end
+
+--- Checks the current state of energy, deposit, and tool needs and takes appropriate actions.
+function	diggy.check_state()
+	diggy.need_energy = diggy.energy_threshold > get_energy()
+	diggy.need_deposit = diggy.check_deposit()
+	diggy.need_tool = diggy.check_tool()
+
+	diggy.print_state()
+	diggy.refill()
 end
 
 --- Deposits items from the robot's inventory into a chest.
@@ -752,18 +839,20 @@ function	diggy.print_state()
 	if diggy.need_tool then ko("tool") else ok("tool") end
 end
 
---- Checks the current state of energy, deposit, and tool needs and takes appropriate actions.
-function	diggy.check_state()
-	diggy.need_energy = diggy.energy_threshold > get_energy()
-	diggy.need_deposit = diggy.check_deposit()
-	diggy.need_tool = diggy.check_tool()
-
-	diggy.print_state()
-	diggy.refill()
-end
-
 --- [[ MAIN ]] ---
+
+jobs = {
+	["current_task"] = 0,
+	["task"] = {
+		{
+			["type"] = "cylinder",
+			["data"] = {-228, -1033, 4, 10, 1},
+			-- incomming saving features
+			["last_data"] = {}
+		}
+	}
+}
 
 -- Checks the initial state and starts the digging operation.
 diggy.check_state()
-diggy.dig_cylinder(-228, -1033, 4, 10, 1)
+diggy.do_task()
