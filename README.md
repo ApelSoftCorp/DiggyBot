@@ -107,10 +107,10 @@ faced in order to be interacted)
 
 # ToDo
 
-1. try to fix dumb soft movement. maybe stop direction when changing_dir()
-1. implement persistence (save position)
+1. Fix dumb soft movement.
+1. implement persistence (save position and task progression)
 1. diggy.select_item(), make a `is_tool` function
-1. after refac, make the whole thing a service
+1. after all ToDo done, make the whole thing a service
    1. diggy start circle x, y, z, r, depth
    2. diggy freemove
    3. diggy sleep
