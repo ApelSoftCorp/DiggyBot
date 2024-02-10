@@ -38,9 +38,9 @@ if chat then chat.setName(DIGGY_NAME) end
 local	diggy = {
 	-- Current position
 	["pos"] = {
-		["x"] = -241,
-		["y"] = 4,
-		["z"] = -1033
+		["x"] = 840,
+		["y"] = 59,
+		["z"] = 10066
 	},
 	-- Last known position
 	["last_pos"] = {
@@ -51,7 +51,7 @@ local	diggy = {
 	-- Inventory size
 	["inv_size"] = robot.inventorySize(),
 	-- Current facing direction
-	["facing"] = EAST,
+	["facing"] = WEST,
 	-- Stock of tools
 	["tool_stock"] = 2,
 	-- Tool definitions
@@ -83,10 +83,15 @@ local	diggy = {
 			["slot"] = 3
 		},
 	},
+	-- Step counter,.making step_check steps, make diggy check for his state
+	["step_done"] = 0,
+	["step_check"] = 50,
+	-- Check if diggy is getting back home
+	["replenishing"] = false,
 	-- Threshold for inventory fullness
 	["full_threshold"] = 2,
 	-- Threshold for energy level
-	["energy_threshold"] = 15,
+	["energy_threshold"] = 20,
 	-- Flags indicating need for energy, deposit, and tool
 	["need_energy"] = false,
 	["need_deposit"] = false,
@@ -103,9 +108,21 @@ tool_order = {
 
 -- Base waypoints
 base = {
-	["charger"] = {-263, -1033, 4, WEST},
-	["deposit"] = {-263, -1028, 4, WEST},
-	["tool"] = {-263, -1021, 4, WEST},
+	["charger"] = {791, 10066, 63, SOUTH},
+	["deposit"] = {789, 10066, 63, SOUTH},
+	["tool"] = {786, 10066, 63, SOUTH},
+}
+
+jobs = {
+	["current_task"] = 0,
+	["task"] = {
+		{
+			["type"] = "cylinder",
+			["data"] = {840, 10066, 59, 10, 10},
+			-- incomming saving features
+			["last_data"] = {}
+		}
+	}
 }
 
 --- [[ UTILS ]] ---
@@ -288,6 +305,7 @@ function	diggy.step(dir, soft)
 		end
 		return false
 	end
+
 	if dir == 1 then
 		diggy.pos.y = diggy.pos.y + 1
 	elseif dir == 2 then
@@ -303,6 +321,15 @@ function	diggy.step(dir, soft)
 			diggy.pos.z = diggy.pos.z - 1
 		end
 	end
+
+	diggy.step_done = diggy.step_done + 1
+	if diggy.replenishing == false then
+		if diggy.step_done > diggy.step_check then
+			diggy.replenishing = true
+			diggy.check_state()
+			diggy.replenishing = false
+		end
+	end
 	return true
 end
 
@@ -316,8 +343,6 @@ function	diggy.move(x, z, y, soft)
 	local	dx = x - diggy.pos.x
 	local	dy = y - diggy.pos.y
 	local	dz = z - diggy.pos.z
-
-	diggy.place(DOWN)
 
 	--- Moves the robot along the x-axis.
 	function	move_x()
@@ -408,7 +433,7 @@ function	diggy.get_out(wp)
 	local	vx, vz = wp[1] - diggy.pos.x, wp[2] - diggy.pos.z
 	local	dx, dz = 0, 0
 	local	t = diggy.get_task()
-	local	x, z, y = t.data[1], t.data[2], t.data[3]
+	local	x, z, y = t.data[1], t.data[2], t.data[3] + 1
 
 	if vx > 0 then
 		dx = 1
@@ -489,7 +514,8 @@ end
 ---@return boolean # True if a suitable item is found and selected, false otherwise.
 function	diggy.select_item()
 	for i = diggy.get_block_slot() + 1, 15 do
-		if robot.count(i) > 2 then
+		local	stack = robot_ic.getStackInInternalSlot(i)
+		if stack and stack.maxSize > 1 then
 			robot.select(i)
 			return true
 		end
@@ -628,7 +654,7 @@ function	diggy.tool_fill(id, missing)
 
 	for i = slot_id, slot_id + diggy.tool_stock - 1 do
 		local	t_tool = diggy.tool_type(i)
-		if t_tool == "void" then
+		if t_tool == "void" or t_tool == "unknown" then
 			robot.select(i)
 			diggy.tool_get(id)
 		end
@@ -688,14 +714,12 @@ function	diggy.do_cylinder(xc, zc, yc, r, d)
 	while true do
 		diggy.say(DIGGY_MSG)
 		diggy.do_circle_perimeter(xc, zc, r)
-		diggy.check_state()
 		r2 = r - 1
 		while r2 > 0 do
 			local	c = circle.get(xc, zc, r2)
 			for i, v in ipairs(c) do
 				diggy.move(v[1], v[2], diggy.pos.y, false)
 			end
-			diggy.check_state()
 			r2 = r2 - 1
 		end
 		if diggy.pos.y == DEPTH then return end
@@ -780,13 +804,14 @@ function	diggy.check_state()
 
 	diggy.print_state()
 	diggy.refill()
+	diggy.step_done = 0
 end
 
 --- Deposits items from the robot's inventory into a chest.
 function	diggy.deposit()
 	local	ii = 1
 
-	for i = diggy.get_block_slot() + 1, diggy.inv_size do
+	for i = (#tool_order * diggy.tool_stock) + 1, diggy.inv_size do
 
 		robot.select(i)
 		while robot_ic.getStackInSlot(3, ii) do
@@ -807,10 +832,11 @@ end
 
 --- Refills energy, deposits items, and replenishes tools based on current needs.
 function	diggy.refill()
-	diggy.last_pos.x = diggy.pos.x
-	diggy.last_pos.y = diggy.pos.y
-	diggy.last_pos.z = diggy.pos.z
-
+	if jobs.current_task > 0 then
+		diggy.last_pos.x = diggy.pos.x
+		diggy.last_pos.y = diggy.pos.y
+		diggy.last_pos.z = diggy.pos.z
+	end
 	if diggy.need_energy then
 		diggy.base_move(base.charger)
 		diggy.recharge()
@@ -826,7 +852,9 @@ function	diggy.refill()
 		diggy.tool_refill()
 		diggy.need_tool = false
 	end
-	diggy.move(diggy.last_pos.x, diggy.last_pos.z, diggy.last_pos.y)
+	if jobs.current_task > 0 then
+		diggy.move(diggy.last_pos.x, diggy.last_pos.z, diggy.last_pos.y)
+	end
 end
 
 --- Prints the current state of energy, deposit, and tool needs.
@@ -840,18 +868,6 @@ function	diggy.print_state()
 end
 
 --- [[ MAIN ]] ---
-
-jobs = {
-	["current_task"] = 0,
-	["task"] = {
-		{
-			["type"] = "cylinder",
-			["data"] = {-228, -1033, 4, 10, 1},
-			-- incomming saving features
-			["last_data"] = {}
-		}
-	}
-}
 
 -- Checks the initial state and starts the digging operation.
 diggy.check_state()
